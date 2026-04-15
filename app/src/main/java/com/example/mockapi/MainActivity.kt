@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,22 +19,19 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 
-// 1. Modelo de datos (Ajustar según tu MockAPI)
 data class User(
     val id: String,
     val name: String,
     val email: String,
+    val avatar: String // Incluimos el campo avatar
 )
 
-// 2. Interfaz de Retrofit
 interface ApiService {
-    @GET("usuarios") // El endpoint de tu MockAPI
+    @GET("usuarios")
     suspend fun getUsers(): List<User>
 }
 
-// 3. Cliente Retrofit (Singleton simple)
 object RetrofitClient {
-    // REEMPLAZA CON LA URL DE TU PROPIO MOCKAPI
     private const val BASE_URL = "https://69df0e91d6de26e119287c3f.mockapi.io/Usuarios/"
 
     val apiService: ApiService by lazy {
@@ -59,45 +57,67 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserListScreen(modifier: Modifier = Modifier) {
-    // Estado local (Ya que no usamos ViewModel)
+    // Estado local
     var users by remember { mutableStateOf<List<User>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isRefreshing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Llamada a la API al iniciar la pantalla
-    LaunchedEffect(Unit) {
+
+    suspend fun fetchData() {
         try {
             users = RetrofitClient.apiService.getUsers()
-            isLoading = false
+            errorMessage = null
         } catch (e: Exception) {
-            errorMessage = "Error al cargar datos: ${e.localizedMessage}"
-            isLoading = false
+            errorMessage = "Error: ${e.localizedMessage}"
+        }
+    }
+
+
+    LaunchedEffect(Unit) {
+        fetchData()
+        isLoading = false
+    }
+
+
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
+            try {
+                fetchData()
+            } finally {
+                isRefreshing = false
+            }
         }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        when {
-            isLoading -> {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            }
-            errorMessage != null -> {
-                Text(
-                    text = errorMessage!!,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.align(Alignment.Center).padding(16.dp)
-                )
-            }
-            else -> {
-                // 4. LazyColumn para mostrar la lista
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(users) { user ->
-                        UserCard(user)
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        } else {
+
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { isRefreshing = true },
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (errorMessage != null && users.isEmpty()) {
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.align(Alignment.Center).padding(16.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(users) { user ->
+                            UserCard(user)
+                        }
                     }
                 }
             }
@@ -117,6 +137,14 @@ fun UserCard(user: User) {
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+
+            AsyncImage(
+                model = user.avatar,
+                contentDescription = "Avatar de ${user.name}",
+                modifier = Modifier
+                    .size(64.dp)
+                    .padding(end = 16.dp)
+            )
             Column {
                 Text(
                     text = user.name,
