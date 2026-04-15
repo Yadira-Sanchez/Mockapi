@@ -23,7 +23,7 @@ data class User(
     val id: String,
     val name: String,
     val email: String,
-    val avatar: String // Incluimos el campo avatar
+    val avatar: String 
 )
 
 interface ApiService {
@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserListScreen(modifier: Modifier = Modifier) {
-    // Estado local
+    
     var users by remember { mutableStateOf<List<User>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
